@@ -8,6 +8,7 @@ require('dotenv').config();
 const User = require('./models/User');
 const Message = require('./models/Message');
 const Block = require('./models/Block');
+
 const pool = require('./config/database');
 
 
@@ -19,76 +20,63 @@ app.use(cors());
 app.use(express.json());
 
 
-// ================= ROUTES =================
-
+// Auth Routes
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
 
 
-const userRoutes = require('./routes/userRoutes');
-app.use('/api/users', userRoutes);
-
-
+// Chat Routes
 const chatRoutes = require('./routes/chatRoutes');
 app.use('/api/chat', chatRoutes);
 
 
-const onlineRoutes = require('./routes/onlineRoutes');
-app.use('/api/online', onlineRoutes);
 
+app.get('/', (req,res)=>{
 
-
-// Test API
-app.get('/', (req, res) => {
-
-    res.send('Chat Algerie API is running!');
+    res.send(
+        'Chat Algerie API is running!'
+    );
 
 });
 
 
 
-// ================= SERVER =================
-
+// HTTP Server
 const server = http.createServer(app);
 
 
 
-// ================= SOCKET.IO =================
+// Socket.IO
+const io = new Server(server,{
 
-const io = new Server(server, {
-
-    cors: {
-        origin: "*"
+    cors:{
+        origin:"*"
     }
 
 });
 
 
 
-// المستخدمون المتصلون
+// Online users
 const onlineUsers = new Map();
 
 
 
-io.on("connection", (socket) => {
+io.on("connection",(socket)=>{
 
 
-    console.log("🟢 Connected:", socket.id);
+    console.log(
+        "🟢 Socket connected:",
+        socket.id
+    );
 
 
 
-    // ================= USER ONLINE =================
-
+    // User online
     socket.on("user_online", async(user_id)=>{
 
 
-        console.log(
-            "User online:",
-            user_id
-        );
-
-
-        try {
+        try{
 
 
             onlineUsers.set(
@@ -97,20 +85,12 @@ io.on("connection", (socket) => {
             );
 
 
-
             await pool.query(
-
                 `
                 INSERT INTO user_status
-                (
-                    user_id,
-                    socket_id,
-                    online
-                )
+                (user_id,socket_id,online)
 
-                VALUES
-                ($1,$2,true)
-
+                VALUES($1,$2,true)
 
                 ON CONFLICT(user_id)
 
@@ -119,30 +99,28 @@ io.on("connection", (socket) => {
                 socket_id=$2,
                 online=true,
                 last_seen=CURRENT_TIMESTAMP
-
                 `,
-
                 [
                     user_id,
                     socket.id
                 ]
-
             );
+
 
 
             console.log(
-                "✅ Status saved"
+                "🟢 User online:",
+                user_id
             );
 
 
-        }catch(error){
 
+        }catch(error){
 
             console.log(
                 "Online error:",
                 error.message
             );
-
 
         }
 
@@ -153,8 +131,7 @@ io.on("connection", (socket) => {
 
 
 
-    // ================= JOIN ROOM =================
-
+    // Join room
     socket.on("join_room",(room_id)=>{
 
 
@@ -175,9 +152,10 @@ io.on("connection", (socket) => {
 
 
 
-    // ================= PUBLIC MESSAGE =================
 
-    socket.on("send_room_message", async(data)=>{
+
+    // Public message
+    socket.on("send_room_message",async(data)=>{
 
 
         try{
@@ -205,14 +183,13 @@ io.on("connection", (socket) => {
             );
 
 
+
         }catch(error){
 
-
             console.log(
-                "Room message error:",
+                "Message error:",
                 error.message
             );
-
 
         }
 
@@ -223,9 +200,11 @@ io.on("connection", (socket) => {
 
 
 
-    // ================= PRIVATE MESSAGE =================
 
-    socket.on("send_private_message", async(data)=>{
+
+    // Private message
+    socket.on("send_private_message",
+    async(data)=>{
 
 
         try{
@@ -245,7 +224,8 @@ io.on("connection", (socket) => {
                 socket.emit(
                     "blocked",
                     {
-                        message:"User blocked"
+                        message:
+                        "لا يمكن إرسال الرسالة"
                     }
                 );
 
@@ -253,6 +233,8 @@ io.on("connection", (socket) => {
                 return;
 
             }
+
+
 
 
 
@@ -266,6 +248,8 @@ io.on("connection", (socket) => {
                 content:data.content
 
             });
+
+
 
 
 
@@ -292,7 +276,6 @@ io.on("connection", (socket) => {
 
         }catch(error){
 
-
             console.log(
                 "Private message error:",
                 error.message
@@ -302,26 +285,6 @@ io.on("connection", (socket) => {
         }
 
 
-    });
-
-
-
-
-
-
-    // ================= TYPING =================
-
-    socket.on("typing",(data)=>{
-
-
-        socket.to(
-            `room_${data.room_id}`
-        )
-        .emit(
-            "typing",
-            data
-        );
-
 
     });
 
@@ -329,34 +292,31 @@ io.on("connection", (socket) => {
 
 
 
-    // ================= DISCONNECT =================
 
-    socket.on("disconnect", async()=>{
+
+
+    // Disconnect
+
+    socket.on("disconnect",async()=>{
 
 
         try{
 
 
             await pool.query(
-
                 `
                 UPDATE user_status
 
-                SET
-
-                online=false,
-
+                SET online=false,
                 last_seen=CURRENT_TIMESTAMP
-
 
                 WHERE socket_id=$1
                 `,
-
                 [
                     socket.id
                 ]
-
             );
+
 
 
             console.log(
@@ -365,15 +325,13 @@ io.on("connection", (socket) => {
             );
 
 
+
         }catch(error){
 
-
-            console.log(
-                error.message
-            );
-
+            console.log(error.message);
 
         }
+
 
 
     });
@@ -385,9 +343,11 @@ io.on("connection", (socket) => {
 
 
 
-// ================= START =================
 
-server.listen(PORT, async()=>{
+
+// Start Server
+
+server.listen(PORT,async()=>{
 
 
     console.log(
@@ -405,6 +365,7 @@ server.listen(PORT, async()=>{
         console.log(
             "✅ Database connected successfully"
         );
+
 
 
     }catch(error){
